@@ -1,0 +1,257 @@
+openapi: 3.0.3
+info:
+  title: Codegen A2A Contract
+  description: Contrato Agent-to-Agent entre Orquestrador e Codegen
+  version: 1.0.0
+  contact:
+    name: Orquestrador Multi-Agente Team
+    email: team@orquestrador.dev
+
+servers:
+  - url: https://codegen-agent.api.dev
+    description: Ambiente de desenvolvimento
+  - url: https://codegen-agent.api.prod
+    description: Ambiente de produção
+
+security:
+  - BearerAuth: []
+
+paths:
+  /api/v1/capabilities:
+    get:
+      summary: Listar capacidades disponíveis
+      description: Retorna todas as capacidades que o agente Codegen pode executar
+      responses:
+        '200':
+          description: Lista de capacidades
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilitiesResponse'
+
+  /api/v1/execute:
+    post:
+      summary: Executar operação
+      description: Solicita execução de uma operação específica
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionRequest'
+      responses:
+        '202':
+          description: Operação aceita para execução
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionResponse'
+        '400':
+          description: Requisição inválida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/status/{execution_id}:
+    get:
+      summary: Verificar status de execução
+      description: Retorna o status atual de uma execução
+      parameters:
+        - name: execution_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Status da execução
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+
+  /api/v1/health:
+    get:
+      summary: Health check
+      description: Verifica saúde do agente
+      responses:
+        '200':
+          description: Agente saudável
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    MessageEnvelope:
+      type: object
+      required:
+        - version
+        - message_id
+        - correlation_id
+        - timestamp
+        - source_agent
+        - target_agent
+        - message_type
+      properties:
+        version:
+          type: string
+          example: "1.0"
+        message_id:
+          type: string
+          format: uuid
+        correlation_id:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+        source_agent:
+          type: string
+          example: "orchestrator"
+        target_agent:
+          type: string
+          example: "codegen"
+        message_type:
+          type: string
+          enum: [request, response, event, heartbeat]
+
+    ExecutionRequest:
+      type: object
+      required:
+        - envelope
+        - authentication
+        - context
+        - payload
+      properties:
+        envelope:
+          $ref: '#/components/schemas/MessageEnvelope'
+        authentication:
+          type: object
+          properties:
+            token:
+              type: string
+            agent_id:
+              type: string
+            permissions:
+              type: array
+              items:
+                type: string
+        context:
+          type: object
+          properties:
+            task_id:
+              type: string
+            project_id:
+              type: string
+            user_context:
+              type: object
+        payload:
+          type: object
+          properties:
+            operation:
+              type: string
+              enum: [code_generation, pipeline_adjustment, metrics_templates, code_review]
+            parameters:
+              type: object
+            constraints:
+              type: object
+
+    ExecutionResponse:
+      type: object
+      properties:
+        envelope:
+          $ref: '#/components/schemas/MessageEnvelope'
+        payload:
+          type: object
+          properties:
+            execution_id:
+              type: string
+              format: uuid
+            status:
+              type: string
+              enum: [accepted, queued, in_progress, completed, failed, cancelled]
+            estimated_completion:
+              type: string
+              format: date-time
+
+    StatusResponse:
+      type: object
+      properties:
+        envelope:
+          $ref: '#/components/schemas/MessageEnvelope'
+        payload:
+          type: object
+          properties:
+            execution_id:
+              type: string
+              format: uuid
+            status:
+              type: string
+              enum: [queued, in_progress, completed, failed, cancelled]
+            progress:
+              type: integer
+              minimum: 0
+              maximum: 100
+            result:
+              type: object
+            metadata:
+              type: object
+
+    CapabilitiesResponse:
+      type: object
+      properties:
+        capabilities:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              operations:
+                type: array
+                items:
+                  type: string
+              input_schema:
+                type: object
+              output_schema:
+                type: object
+              approval_required:
+                type: boolean
+              max_execution_time:
+                type: string
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        version:
+          type: string
+        uptime:
+          type: string
+        capabilities_available:
+          type: boolean
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
